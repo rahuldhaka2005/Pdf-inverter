@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Color Inverter</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        .header {
+            background: linear-gradient(135deg, #6b7280, #1f2937);
+            color: white;
+            text-align: center;
+            padding: 60px 20px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+        }
+        .header p {
+            font-size: 1.2em;
+            margin: 10px 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 0 20px;
+            text-align: center;
+        }
+        .upload-section {
+            margin: 30px 0;
+        }
+        .upload-btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #1f2937;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.1em;
+            transition: background-color 0.3s;
+        }
+        .upload-btn:hover {
+            background-color: #374151;
+        }
+        #pdf-upload {
+            display: none;
+        }
+        .download-btn {
+            display: none;
+            padding: 12px 24px;
+            background-color: #10b981;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.1em;
+            text-decoration: none;
+            margin-top: 20px;
+        }
+        .download-btn:hover {
+            background-color: #059669;
+        }
+        #pdf-container {
+            margin-top: 20px;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            margin: 10px auto;
+            display: block;
+        }
+        .features {
+            display: flex;
+            justify-content: space-around;
+            margin: 40px 0;
+            flex-wrap: wrap;
+        }
+        .feature {
+            max-width: 200px;
+            margin: 10px;
+        }
+        .feature h3 {
+            font-size: 1.3em;
+            margin: 10px 0;
+        }
+        footer {
+            background-color: #1f2937;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            width: 100%;
+        }
+        .loading {
+            display: none;
+            margin-top: 10px;
+            font-size: 1em;
+            color: #555;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+            display: none;
+        }
+        @media (max-width: 600px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+            .header p {
+                font-size: 1em;
+            }
+            .container {
+                padding: 0 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <h1>PDF Color Inverter</h1>
+        <p>Invert your PDF colors and download the result instantly!</p>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <div class="upload-section">
+            <h2>Invert Your PDF</h2>
+            <p>Upload your PDF to invert colors (white to black, black to white) and download the inverted version.</p>
+            <label for="pdf-upload" class="upload-btn">Choose PDF File</label>
+            <input type="file" id="pdf-upload" accept=".pdf" />
+        </div>
+
+        <!-- Download Button -->
+        <a id="download-btn" class="download-btn" href="#" download="inverted.pdf">Download Inverted PDF</a>
+        <div id="loading" class="loading">Generating PDF...</div>
+        <div id="error" class="error"></div>
+
+        <!-- Features Section -->
+        <div class="features">
+            <div class="feature">
+                <h3>Simple & Fast</h3>
+                <p>Upload and invert your PDF in seconds.</p>
+            </div>
+            <div class="feature">
+                <h3>Browser-Based</h3>
+                <p>No software installation needed.</p>
+            </div>
+            <div class="feature">
+                <h3>High Quality</h3>
+                <p>Preserve PDF quality with inverted colors.</p>
+            </div>
+        </div>
+
+        <!-- PDF Rendering Area -->
+        <div id="pdf-container"></div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <p>© 2025 PDF Color Inverter. All rights reserved.</p>
+    </footer>
+
+    <!-- Load pdf.js and pdf-lib.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <script src="https://unpkg.com/pdf-lib@1.17.0/dist/pdf-lib.min.js"></script>
+    <script>
+        // Set workerSrc for pdf.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+
+        let canvases = []; // Store canvases for download
+
+        // Function to invert canvas content at pixel level
+        function invertCanvas(canvas) {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempContext = tempCanvas.getContext('2d');
+
+            // Draw original canvas
+            tempContext.drawImage(canvas, 0, 0);
+
+            // Get image data and invert colors
+            const imageData = tempContext.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+
+            for (let i = 0; i < data.length; i += 4) {
+                data[i] = 255 - data[i]; // Red
+                data[i + 1] = 255 - data[i + 1]; // Green
+                data[i + 2] = 255 - data[i + 2]; // Blue
+                // Alpha (data[i + 3]) remains unchanged
+            }
+
+            tempContext.putImageData(imageData, 0, 0);
+            return tempCanvas;
+        }
+
+        // Handle PDF upload
+        document.getElementById('pdf-upload').addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            const errorDiv = document.getElementById('error');
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+
+            if (file && file.type === 'application/pdf') {
+                const fileReader = new FileReader();
+                fileReader.onload = function () {
+                    const arrayBuffer = this.result;
+                    renderPDF(arrayBuffer);
+                };
+                fileReader.readAsArrayBuffer(file);
+            } else {
+                errorDiv.textContent = 'Please upload a valid PDF file.';
+                errorDiv.style.display = 'block';
+            }
+        });
+
+        // Render PDF with pdf.js
+        async function renderPDF(arrayBuffer) {
+            const pdfContainer = document.getElementById('pdf-container');
+            const downloadBtn = document.getElementById('download-btn');
+            const loading = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
+            pdfContainer.innerHTML = ''; // Clear previous content
+            canvases = []; // Reset canvases array
+            downloadBtn.style.display = 'none'; // Hide download button
+            loading.style.display = 'none'; // Hide loading indicator
+            errorDiv.style.display = 'none';
+
+            try {
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                console.log(`Rendering PDF with ${pdf.numPages} pages...`);
+
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    const page = await pdf.getPage(pageNum);
+                    const viewport = page.getViewport({ scale: 1.5 }); // Higher scale for quality
+
+                    // Create canvas for each page
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+
+                    // Render PDF page to canvas
+                    await page.render({
+                        canvasContext: context,
+                        viewport: viewport
+                    }).promise;
+
+                    // Invert the canvas content
+                    const invertedCanvas = invertCanvas(canvas);
+                    pdfContainer.appendChild(invertedCanvas);
+                    canvases.push(canvas); // Store original canvas for download
+
+                    console.log(`Rendered page ${pageNum}`);
+                }
+
+                // Show download button after rendering
+                downloadBtn.style.display = 'inline-block';
+            } catch (error) {
+                console.error('Error rendering PDF:', error);
+                errorDiv.textContent = 'Failed to load PDF: ' + error.message;
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        // Handle PDF download
+        document.getElementById('download-btn').addEventListener('click', async function (e) {
+            e.preventDefault();
+            const loading = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
+            loading.style.display = 'block'; // Show loading indicator
+            errorDiv.style.display = 'none';
+
+            try {
+                console.log('Starting PDF generation...');
+                const pdfDoc = await PDFLib.PDFDocument.create();
+
+                for (let i = 0; i < canvases.length; i++) {
+                    const canvas = canvases[i];
+                    // Get inverted canvas
+                    const invertedCanvas = invertCanvas(canvas);
+
+                    // Embed the inverted canvas as an image
+                    const imgData = invertedCanvas.toDataURL('image/png');
+                    console.log(`Embedding page ${i + 1}...`);
+                    const img = await pdfDoc.embedPng(imgData);
+                    const page = pdfDoc.addPage([canvas.width, canvas.height]);
+                    page.drawImage(img, {
+                        x: 0,
+                        y: 0,
+                        width: canvas.width,
+                        height: canvas.height
+                    });
+                }
+
+                // Save the PDF
+                console.log('Saving PDF...');
+                const pdfBytes = await pdfDoc.save();
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'inverted.pdf';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                console.log('PDF downloaded successfully.');
+            } catch (error) {
+                console.error('Error generating PDF:', error);
+                errorDiv.textContent = 'Failed to generate PDF: ' + error.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                loading.style.display = 'none'; // Hide loading indicator
+            }
+        });
+    </script>
+</body>
+</html>
